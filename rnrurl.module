@@ -1,0 +1,150 @@
+<?php
+
+function rnrurl_perm() {
+  return array("Bypass rnrurl access");
+}
+
+
+function rnrurl_widget_settings_alter(&$v, $op, $widget) {
+  if($widget['module'] == 'nodereference'){ // FIXME 
+   switch ($op) {
+      case 'form':
+        $v['rnrurl'] = array(
+          '#type' => 'fieldset',
+          '#title' => t('Reverse Node Reference Settings'),
+          '#description' => 'A link will be presented on the node to ',
+          '#collapsible' => TRUE,
+          '#collapsed' => TRUE,
+          '#weight' => 2,
+          '#tree'=>true,
+        );
+
+        $v['rnrurl']['node_link'] = array(
+          '#tree' => TRUE,
+          '#type' => 'fieldset',
+          '#title' => t('Referenceable node links'),
+          '#element_validate' => array('nodereference_url_node_link_validate'),
+          '#description' => t('These settings will automatically make a link on nodes that can reference. Clicking the link will take the user to the new node form and on save update the original node.'),
+        );
+        $v['rnrurl']['node_link']['teaser'] = array(
+          '#type' => 'checkbox',
+          '#title' => t('Create link on the teaser view'),
+          '#default_value' => isset($widget['node_link']['teaser']) ? $widget['node_link']['teaser'] : FALSE,
+        );
+        $v['rnrurl']['node_link']['full'] = array(
+          '#type' => 'checkbox',
+          '#title' => t('Create link on the full view'),
+          '#default_value' => isset($widget['node_link']['full']) ? $widget['node_link']['full'] : TRUE,
+        );
+        $v['rnrurl']['node_link']['title'] = array(
+          '#type' => 'textfield',
+          '#title' => t('Link title'),
+          '#default_value' => isset($widget['node_link']['title']) ? $widget['node_link']['title'] : '',
+          '#description' => t('The title is the visible text for the link. This is required if you enable the content links.'),
+        );
+        $v['rnrurl']['node_link']['hover_title'] = array(
+          '#type' => 'textfield',
+          '#title' => t('Link hover title'),
+          '#default_value' => isset($widget['node_link']['hover_title']) ? $widget['node_link']['hover_title'] : '',
+          '#description' => t('Text shown while hovering over the link.'),
+        );
+        $v['rnrurl']['node_link']['destination'] = array(
+          '#type' => 'select',
+          '#title' => t('Return path'),
+          '#default_value' => isset($widget['node_link']['destination']) ? $widget['node_link']['destination'] : 'default',
+          '#options' => array(
+            'default' => t('The new node (no redirect)'),
+            'node' => t('The original node'),
+            'source' => t('The previous page'),
+          ),
+          '#description' => t('After creating the new node through the link, determine where the user should be redirected.'),
+        );
+
+        break;
+      case 'save':
+        $v = array_merge($v, array('rnrurl'));
+        break;
+    }
+  }
+}
+
+/**
+ * Implementation of hook_link().
+ */
+function rnrurl_link($type, $object, $teaser = FALSE) {
+  if ($type == 'node') {
+    return rnrurl_build_all_links($object, $teaser);
+  }
+}
+/**
+ * Build an array of links for nodereference_url widgets that point to this node.
+ *
+ * @param $node
+ *   A fully loaded node object.
+ * @param $teaser
+ *   
+ * @return
+ *   An array of links for use with theme_links().
+ */
+function rnrurl_build_all_links($node, $teaser) {
+  $links = array();
+  $fields = content_types($node->type);
+  $fields = $fields['fields'];
+  foreach ($fields as $field_name => $field) {
+    if ($field['widget']['rnrurl']['node_link'] && 
+      (($teaser && $field['widget']['rnrurl']['node_link']['teaser'])
+      || (empty($teaser) && $field['widget']['rnrurl']['node_link']['full']))
+    ) {
+        foreach (array_filter($field['referenceable_types']) as $type) {
+          if ($link = rnrurl_build_link($node, $type, $field)) 
+            $links['rnrurl_'. $type . '_' . $field_name] = $link;
+        }
+    }
+  }
+  return $links;
+}
+
+function rnrurl_build_link($node, $type,$field) {
+  if (!user_access('create '.$type . ' content')) return;
+  if (user_access('Bypass rnrurl access') || array_filter(module_invoke_all('nrnurlaccess',$node,$field,$type))) {
+    $array =  array(
+    'title' => $field['widget']['rnrurl']['node_link']['title'],
+    'href'=> 'node/add/'. str_replace('_','-',$type),
+    'attributes'=>array(
+      'title' => $field['widget']['rnrurl']['node_link']['hover_title'],
+    ),
+    'query'=> array(
+      'destination'=> 
+        (
+        $field['widget']['rnrurl']['node_link']['destination']=='node'? 'node/'.$node->nid:
+          ( $field['widget']['rnrurl']['node_link']['destination']=='source'?drupal_get_destination():'')
+        ),
+      'rnrurl' => $node->nid,
+      'field'=>$field['field_name'],
+      'token' => drupal_get_token($node->nid . '_' . $type . '_' . $field['field_name']),
+    )
+  );
+    if (!$array['query']['destination']) unset($array['query']['destination']);
+    return $array;
+  }
+  return NULL; 
+}
+function rnrurl_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
+  switch ($op) {
+    case 'insert':
+      if ($_GET['rnrurl'] && is_numeric($_GET['rnrurl']) ) {
+        $parent = node_load($_GET['rnrurl']);
+        $field = content_fields($_GET['field']);
+        if (
+        $parent && 
+        $_GET['token'] ==  drupal_get_token($parent->nid . '_' . $node->type . '_' . $field['field_name'])
+        &&(
+        user_access('Bypass rnrurl access') || array_filter(module_invoke_all('nrnurlaccess',$parent,$field,$node->type))
+        )) {
+          $fieldname = $field['field_name'];
+          $parent->{$fieldname}[] = array('nid'=>$node->nid);
+          node_save($parent); 
+        }
+     }
+  }
+}

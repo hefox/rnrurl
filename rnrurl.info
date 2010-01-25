@@ -1,0 +1,4 @@
+name = Reverse node reference url
+description =  Updates a multi node reference of a node with a node being created
+package = Choice your own adventure
+core = 6.x
