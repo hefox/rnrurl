@@ -105,7 +105,7 @@ function rnrurl_build_all_links($node, $teaser) {
 }
 
 function rnrurl_build_link($node, $type,$field) {
-  if (!user_access('create '.$type . ' content')) return;
+  if (!node_access('create',$type)) return;
   if (user_access('Bypass rnrurl access') || array_filter(module_invoke_all('nrnurlaccess',$node,$field,$type))) {
     $array =  array(
     'title' => $field['widget']['rnrurl']['node_link']['title'],
