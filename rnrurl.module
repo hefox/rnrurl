@@ -1,10 +1,18 @@
 <?php
 
+/*
+ * Implementation of hook_perm
+ * Adds a permission to bypass any rnrnurl permission checking 
+ */
+
 function rnrurl_perm() {
   return array("Bypass rnrurl access");
 }
 
-
+/*
+ * Implementation of hook_widget_settings_alter
+ * Adds settings to widget form to enable for a nodereference fieldfield  
+ */
 function rnrurl_widget_settings_alter(&$v, $op, $widget) {
   if($widget['module'] == 'nodereference'){ // FIXME 
    switch ($op) {
@@ -77,7 +85,7 @@ function rnrurl_link($type, $object, $teaser = FALSE) {
   }
 }
 /**
- * Build an array of links for nodereference_url widgets that point to this node.
+ * Build an array of links for rnrurl that point node creation with information of referenced node.
  *
  * @param $node
  *   A fully loaded node object.
@@ -121,7 +129,7 @@ function rnrurl_build_link($node, $type,$field) {
         ),
       'rnrurl' => $node->nid,
       'field'=>$field['field_name'],
-      'token' => drupal_get_token($node->nid . '_' . $type . '_' . $field['field_name']),
+      'token' => drupal_get_token($node->nid . '_' . $type . '_' . $field['field_name']), 
     )
   );
     if (!$array['query']['destination']) unset($array['query']['destination']);
@@ -129,6 +137,11 @@ function rnrurl_build_link($node, $type,$field) {
   }
   return NULL; 
 }
+
+/**
+ * Implementation of hook_nodeapi().
+ * Updates a node with the reference
+ */
 function rnrurl_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
   switch ($op) {
     case 'insert':
